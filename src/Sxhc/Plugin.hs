@@ -36,29 +36,6 @@ printStgExpr (StgLam bndrs body)
          printStgExpr body ]
   where ppr_list = brackets . fsep . punctuate comma
 
--- special case: let v = <very specific thing>
---               in
---               let ...
---               in
---               ...
---
--- Very special!  Suspicious! (SLPJ)
-
-{-
-printStgExpr (StgLet srt (StgNonRec bndr (StgRhsClosure cc bi free_vars upd_flag args rhs))
-                        expr@(StgLet _ _))
-  = ($$)
-      (hang (hcat [text "let { ", ppr bndr, ptext (sLit " = "),
-                          ppr cc,
-                          pp_binder_info bi,
-                          text " [", ifPprDebug (interppSP free_vars), ptext (sLit "] \\"),
-                          ppr upd_flag, text " [",
-                          interppSP args, char ']'])
-            8 (sep [hsep [ppr rhs, text "} in"]]))
-      (ppr expr)
--}
-
--- special case: let ... in let ...
 
 printStgExpr (StgLet bind expr@(StgLet _ _))
   = ($$)
@@ -113,13 +90,29 @@ printStgRhs (StgRhsCon ccs dataConstructor args) = hcat [ppr dataConstructor, br
 
 printStgRhs rhs = text "rhs"
 
-printStgBinding :: StgBinding -> SDoc
-printStgBinding (StgNonRec _ rhs) = printStgRhs rhs
-printStgBinding binders = text "binders"
+printGenStgBinding :: (OutputableBndr bndr, Outputable bdee, Ord bdee)
+                 => GenStgBinding bndr bdee -> SDoc
 
+printGenStgBinding (StgNonRec bndr rhs)
+  = hang (hsep [pprBndr LetBind bndr, equals])
+        4 (ppr rhs Outputable.<> semi)
+
+printGenStgBinding (StgRec pairs)
+  = vcat $ foofoo (text "{- StgRec (begin) -}") :
+           map (ppr_bind) pairs ++ [foofoo (text "{- StgRec (end) -}")]
+  where
+    ppr_bind (bndr, expr)
+      = hang (hsep [pprBndr LetBind bndr, equals])
+             4 (ppr expr Outputable.<> semi)
+
+
+printStgBinding :: StgBinding -> SDoc
+printStgBinding  = printGenStgBinding
 
 printStgTopBinding :: StgTopBinding -> SDoc
-printStgTopBinding (StgTopStringLit _ bytestring) = text "stringLit"
+printStgTopBinding (StgTopStringLit bndr str)
+  = hang (hsep [pprBndr LetBind bndr, equals])
+          4 (pprHsBytes str Outputable.<> semi)
 printStgTopBinding (StgTopLifted top) = printStgBinding top
 
 
